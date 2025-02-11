@@ -17,11 +17,14 @@ var (
 	}
 
 	mutex     sync.Mutex
-	broadcast = make(chan map[*websocket.Conn][]byte)
+	broadcast = make(chan broadcastStruct)
 )
 
-var Chat []string
-var ChatType int
+type broadcastStruct struct {
+	Username string
+	Conn     *websocket.Conn
+	msg      []byte
+}
 
 func HandleWebsocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
@@ -38,6 +41,7 @@ func HandleWebsocket(w http.ResponseWriter, r *http.Request) {
 	log.Println("Client connected")
 
 	for {
+		// TODO: fix the bug, when someone leaves it makes the server disfucntional
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
 			log.Println("Error reading:", err)
@@ -45,25 +49,24 @@ func HandleWebsocket(w http.ResponseWriter, r *http.Request) {
 			delete(clients, conn)
 			break
 		}
-		connMap := make(map[*websocket.Conn][]byte)
-		connMap[conn] = msg
-		broadcast <- connMap
+		msgStruct := broadcastStruct{
+			Conn: conn,
+			msg:  msg,
+		}
+		broadcast <-msgStruct 
 	}
 }
 
 func HandleBroadcast() {
 	for {
-		connMap := <-broadcast
+		msgStruct := <-broadcast
 
 		for conn := range clients {
 			mutex.Lock()
-			_, ok := connMap[conn]
-			if !ok {
-				for _, msg := range connMap {
-					if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
-						log.Println("Error broadcasting:", err)
-						delete(clients, conn)
-					}
+			if msgStruct.Conn != conn {
+				if err := conn.WriteMessage(websocket.TextMessage, msgStruct.msg); err != nil {
+					log.Println("Error broadcasting:", err)
+					delete(clients, conn)
 				}
 			}
 			mutex.Unlock()
