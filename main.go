@@ -10,6 +10,7 @@ var port = ":8080"
 func main() {
 	mux := http.NewServeMux()
 
+	mux.HandleFunc("/", HandleHtml)
 	mux.HandleFunc("/ws", HandleWebsocket)
 
 	go HandleBroadcast()

@@ -1,10 +1,12 @@
 package main
 
 import (
-	"github.com/gorilla/websocket"
+	"encoding/json"
 	"log"
 	"net/http"
 	"sync"
+
+	"github.com/gorilla/websocket"
 )
 
 var (
@@ -41,19 +43,27 @@ func HandleWebsocket(w http.ResponseWriter, r *http.Request) {
 	log.Println("Client connected")
 
 	for {
-		// TODO: fix the bug, when someone leaves it makes the server disfucntional
-		_, msg, err := conn.ReadMessage()
+		_, data, err := conn.ReadMessage()
 		if err != nil {
 			log.Println("Error reading:", err)
 			mutex.Lock()
 			delete(clients, conn)
+			log.Println("disconnectiong the client")
+			mutex.Unlock()
 			break
 		}
+		htmxMap := make(map[string]interface{})
+		if err = json.Unmarshal(data, &htmxMap); err != nil {
+			log.Println(err)
+			break
+		}
+		msg := htmxMap["payload"].(string)
+
 		msgStruct := broadcastStruct{
 			Conn: conn,
-			msg:  msg,
+			msg:  []byte(msg),
 		}
-		broadcast <-msgStruct 
+		broadcast <- msgStruct
 	}
 }
 
